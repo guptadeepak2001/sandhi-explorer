@@ -156,7 +156,7 @@ struct ContentView: View {
                                 }
                             }
                     }
-                    .disabled(isMerged || isPreparingMerge)
+                    .disabled(isPreparingMerge)
                     .padding(.horizontal, 24)
 
                     Button(action: {
@@ -193,6 +193,10 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.58, dampingFraction: 0.74), value: isMerged)
+        .onChange(of: focusedField) { newValue in
+            guard let field = newValue else { return }
+            beginEditing(field)
+        }
         .task {
             runLaunchStory()
         }
@@ -205,11 +209,12 @@ struct ContentView: View {
         let normalizedRight = rightWord.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedLeft.isEmpty, !normalizedRight.isEmpty else { return }
 
-        let sandhiResult = SandhiEngine.applyProjectSandhi(left: normalizedLeft, right: normalizedRight)
+        let prepared = ScriptAdapter.prepare(left: normalizedLeft, right: normalizedRight)
+        let sandhiResult = SandhiEngine.applyProjectSandhi(left: prepared.left, right: prepared.right)
         let matchedSutra = sandhiResult.steps.first(where: { $0.sutra != nil })?.sutra
         let matchedText = matchedSutra.map { "Rule Applied: \($0.code) • \($0.title)" } ??
             "Rule Applied: none"
-        let output = sandhiResult.output
+        let output = ScriptAdapter.present(sandhiResult.output, as: prepared.outputScript)
 
         playMergeCueStart()
 
@@ -246,6 +251,30 @@ struct ContentView: View {
             resultWord = nil
             showRuleBadge = false
             ruleLabel = "Panini Engine Ready"
+        }
+    }
+
+    private func beginEditing(_ field: InputField) {
+        if isMerged {
+            clearMergedState(animated: true)
+        }
+        focusedField = field
+    }
+
+    private func clearMergedState(animated: Bool) {
+        let applyReset = {
+            isMerged = false
+            resultWord = nil
+            showRuleBadge = false
+            ruleLabel = "Panini Engine Ready"
+        }
+
+        if animated {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                applyReset()
+            }
+        } else {
+            applyReset()
         }
     }
 
