@@ -1,152 +1,179 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var leftWord = "rAma"
-    @State private var rightWord = "indra"
-    @State private var result = SandhiEngine.applyProjectSandhi(left: "rAma", right: "indra")
+    private enum InputField {
+        case left
+        case right
+    }
+
+    @State private var leftWord = "namah"
+    @State private var rightWord = "te"
+    @State private var resultWord: String?
+    @State private var isMerged = false
+    @State private var ruleLabel = "Panini Engine Ready"
+    @Namespace private var animationSpace
+    @FocusState private var focusedField: InputField?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Panini Sandhi Engine")
-                        .font(.title.bold())
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(uiColor: .systemGroupedBackground),
+                    Color(uiColor: .secondarySystemGroupedBackground)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-                    Text("Build input pairs and see which sutra fires (6.1 vowels + Visarga).")
+            VStack(spacing: 28) {
+                VStack(spacing: 8) {
+                    Text("Sandhi Explorer")
+                        .font(.largeTitle)
+                        .fontWeight(.black)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .teal],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Text("Panini's Algorithm (6.1 & 8.3)")
+                        .font(.caption)
+                        .fontWeight(.medium)
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .padding(.top, 30)
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Input")
-                            .font(.headline)
+                Spacer(minLength: 0)
 
-                        TextField("Left word", text: $leftWord)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                ZStack {
+                    if isMerged, let resultWord {
+                        VStack(spacing: 16) {
+                            ZStack {
+                                WordBubble(text: resultWord, isResult: true)
+                                    .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
 
-                        TextField("Right word", text: $rightWord)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-
-                        HStack(spacing: 12) {
-                            Button("Run Sandhi Engine") {
-                                runEngine()
+                                Color.clear
+                                    .frame(width: 1, height: 1)
+                                    .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .contentShape(Rectangle())
+                            .onTapGesture { reset() }
 
-                            Button("Load Demo") {
-                                leftWord = "hari"
-                                rightWord = "avatAra"
-                                runEngine()
-                            }
-                            .buttonStyle(.bordered)
+                            Text(ruleLabel)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                                .multilineTextAlignment(.center)
                         }
-                    }
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    } else {
+                        HStack(spacing: 14) {
+                            WordBubble(text: displayWord(leftWord))
+                                .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Output")
-                            .font(.headline)
-                        Text(result.output)
-                            .font(.title3.monospaced())
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Execution Trace")
-                            .font(.headline)
-
-                        ForEach(result.steps) { step in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(step.phase.rawValue)
-                                    .font(.caption.weight(.semibold))
-                                    .textCase(.uppercase)
-                                    .foregroundStyle(.secondary)
-
-                                if let sutra = step.sutra {
-                                    Text("\(sutra.code) • \(sutra.title)")
-                                        .font(.subheadline.weight(.semibold))
-                                }
-
-                                Text(step.explanation)
-                                    .font(.subheadline)
-                                Text("\(step.before) → \(step.after)")
-                                    .font(.footnote.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Project Scope Lock")
-                            .font(.headline)
-                        Text("Only 6.1.77-6.1.109 is active for runtime logic.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("Visarga module is active for 8.3.34, 8.3.36, and 6.1.114.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("6.1.1-6.1.76 is kept as archived catalog metadata.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Active Runtime Rules")
-                            .font(.headline)
-
-                        ForEach(SandhiEngine.projectRuntimeRulebook, id: \.self) { sutra in
-                            Text("\(sutra.code) • \(sutra.title)")
-                                .font(.subheadline.monospaced())
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        let coverage = SandhiEngine.chapter6_1ProjectCoverageSummary
-                        Text("Project Target Coverage")
-                            .font(.headline)
-                        Text("\(coverage.implemented) of \(coverage.total) target sutras implemented")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(SandhiEngine.chapter6_1ProjectTargets) { sutra in
-                            Text("\(statusLabel(sutra.status)) \(sutra.code) • \(sutra.topic)")
-                                .font(.footnote.monospaced())
+                            Image(systemName: "plus")
+                                .font(.title2.weight(.bold))
                                 .foregroundStyle(.secondary)
-                        }
-                    }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        let coverage = SandhiEngine.visargaProjectCoverageSummary
-                        Text("Visarga Module Coverage")
-                            .font(.headline)
-                        Text("\(coverage.implemented) of \(coverage.total) target sutras implemented")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(SandhiEngine.visargaProjectTargets) { sutra in
-                            Text("\(statusLabel(sutra.status)) \(sutra.code) • \(sutra.topic)")
-                                .font(.footnote.monospaced())
-                                .foregroundStyle(.secondary)
+                            WordBubble(text: displayWord(rightWord))
+                                .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
                         }
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
                 }
-                .padding()
+                .frame(height: 210)
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 18) {
+                    HStack(spacing: 12) {
+                        TextField("Word 1", text: $leftWord)
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.center)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .left)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .right }
+
+                        TextField("Word 2", text: $rightWord)
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.center)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .right)
+                            .submitLabel(.done)
+                            .onSubmit { combine() }
+                    }
+                    .disabled(isMerged)
+                    .padding(.horizontal, 24)
+
+                    Button(action: {
+                        isMerged ? reset() : combine()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: isMerged ? "arrow.counterclockwise" : "wand.and.stars")
+                            Text(isMerged ? "Reset" : "Combine")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(isMerged ? Color.gray : Color.blue, in: RoundedRectangle(cornerRadius: 14))
+                        .shadow(color: isMerged ? .clear : Color.blue.opacity(0.25), radius: 10, x: 0, y: 5)
+                    }
+                    .padding(.horizontal, 24)
+                }
+                .padding(.bottom, 36)
+
+                Text("Scope lock: 6.1.77-6.1.109 + 8.3.34, 8.3.36, 6.1.114")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 12)
             }
-            .navigationTitle("Sandhi Explorer")
+        }
+        .onTapGesture { focusedField = nil }
+        .animation(.spring(response: 0.58, dampingFraction: 0.74), value: isMerged)
+    }
+
+    private func combine() {
+        focusedField = nil
+        let normalizedLeft = leftWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedRight = rightWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedLeft.isEmpty, !normalizedRight.isEmpty else { return }
+
+        let sandhiResult = SandhiEngine.applyProjectSandhi(left: normalizedLeft, right: normalizedRight)
+        let matchedSutra = sandhiResult.steps.first(where: { $0.sutra != nil })?.sutra
+        let matchedText = matchedSutra.map { "Rule Applied: \($0.code) • \($0.title)" } ??
+            "Rule Applied: none"
+
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.72)) {
+            leftWord = normalizedLeft
+            rightWord = normalizedRight
+            resultWord = sandhiResult.output
+            ruleLabel = matchedText
+            isMerged = true
         }
     }
 
-    private func runEngine() {
-        result = SandhiEngine.applyProjectSandhi(left: leftWord, right: rightWord)
+    private func reset() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.78)) {
+            isMerged = false
+            resultWord = nil
+            ruleLabel = "Panini Engine Ready"
+        }
     }
 
-    private func statusLabel(_ status: SutraImplementationStatus) -> String {
-        status == .implemented ? "[x]" : "[ ]"
+    private func displayWord(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "?" : trimmed
     }
 }
