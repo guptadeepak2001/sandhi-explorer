@@ -14,6 +14,10 @@ struct ContentView: View {
     @State private var isMerged = false
     @State private var isPreparingMerge = false
     @State private var showRuleBadge = false
+    @State private var showIntro = true
+    @State private var introTitleVisible = false
+    @State private var introSubtitleVisible = false
+    @State private var introGlow = false
     @State private var ruleLabel = "Panini Engine Ready"
     @Namespace private var animationSpace
     @FocusState private var focusedField: InputField?
@@ -159,9 +163,19 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 12)
             }
+            .blur(radius: showIntro ? 3 : 0)
+            .scaleEffect(showIntro ? 0.985 : 1.0)
+
+            if showIntro {
+                introOverlay
+                    .transition(.opacity)
+            }
         }
         .onTapGesture { focusedField = nil }
         .animation(.spring(response: 0.58, dampingFraction: 0.74), value: isMerged)
+        .task {
+            runLaunchStory()
+        }
     }
 
     private func combine() {
@@ -269,5 +283,73 @@ struct ContentView: View {
         impact.prepare()
         impact.impactOccurred(intensity: 0.7)
         AudioServicesPlaySystemSound(1105)
+    }
+
+    private var introOverlay: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(uiColor: .systemBackground).opacity(0.95),
+                    Color.blue.opacity(0.16),
+                    Color.teal.opacity(0.14)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            Circle()
+                .fill(Color.blue.opacity(introGlow ? 0.22 : 0.10))
+                .frame(width: introGlow ? 320 : 250, height: introGlow ? 320 : 250)
+                .blur(radius: introGlow ? 12 : 3)
+                .animation(.easeInOut(duration: 0.65), value: introGlow)
+
+            VStack(spacing: 12) {
+                Text("Panini Engine")
+                    .font(.system(size: 36, weight: .black, design: .serif))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .teal],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(introTitleVisible ? 1 : 0)
+                    .offset(y: introTitleVisible ? 0 : 10)
+
+                Text("Where 2500-year-old rules become living motion.")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+                    .opacity(introSubtitleVisible ? 1 : 0)
+                    .offset(y: introSubtitleVisible ? 0 : 8)
+            }
+        }
+    }
+
+    private func runLaunchStory() {
+        guard showIntro else { return }
+
+        let introImpact = UIImpactFeedbackGenerator(style: .soft)
+        introImpact.prepare()
+
+        withAnimation(.easeOut(duration: 0.34)) {
+            introGlow = true
+            introTitleVisible = true
+        }
+        introImpact.impactOccurred(intensity: 0.72)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.easeOut(duration: 0.26)) {
+                introSubtitleVisible = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.15) {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                showIntro = false
+            }
+        }
     }
 }
