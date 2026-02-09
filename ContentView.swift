@@ -3,13 +3,34 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
+    private enum IntroTone {
+        case seriousClassical
+        case modernApple
+        case dramaticStage
+    }
+
+    private struct IntroStyle {
+        let title: String
+        let subtitle: String
+        let colors: [Color]
+        let glowColor: Color
+        let titleGradient: [Color]
+        let titleSize: CGFloat
+        let subtitleColor: Color
+        let impactStyle: UIImpactFeedbackGenerator.FeedbackStyle
+        let impactIntensity: CGFloat
+    }
+
     private enum InputField {
         case left
         case right
     }
 
-    @State private var leftWord = "namah"
-    @State private var rightWord = "te"
+    // One-line style switch for demo tuning.
+    private let introTone: IntroTone = .modernApple
+
+    @State private var leftWord = ""
+    @State private var rightWord = ""
     @State private var resultWord: String?
     @State private var isMerged = false
     @State private var isPreparingMerge = false
@@ -171,7 +192,6 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .onTapGesture { focusedField = nil }
         .animation(.spring(response: 0.58, dampingFraction: 0.74), value: isMerged)
         .task {
             runLaunchStory()
@@ -286,30 +306,28 @@ struct ContentView: View {
     }
 
     private var introOverlay: some View {
-        ZStack {
+        let style = introStyle
+
+        return ZStack {
             LinearGradient(
-                colors: [
-                    Color(uiColor: .systemBackground).opacity(0.95),
-                    Color.blue.opacity(0.16),
-                    Color.teal.opacity(0.14)
-                ],
+                colors: style.colors,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
             Circle()
-                .fill(Color.blue.opacity(introGlow ? 0.22 : 0.10))
+                .fill(style.glowColor.opacity(introGlow ? 0.22 : 0.10))
                 .frame(width: introGlow ? 320 : 250, height: introGlow ? 320 : 250)
                 .blur(radius: introGlow ? 12 : 3)
                 .animation(.easeInOut(duration: 0.65), value: introGlow)
 
             VStack(spacing: 12) {
-                Text("Panini Engine")
-                    .font(.system(size: 36, weight: .black, design: .serif))
+                Text(style.title)
+                    .font(.system(size: style.titleSize, weight: .black, design: .serif))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.blue, .teal],
+                            colors: style.titleGradient,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -317,9 +335,9 @@ struct ContentView: View {
                     .opacity(introTitleVisible ? 1 : 0)
                     .offset(y: introTitleVisible ? 0 : 10)
 
-                Text("Where 2500-year-old rules become living motion.")
+                Text(style.subtitle)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(style.subtitleColor)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 28)
                     .opacity(introSubtitleVisible ? 1 : 0)
@@ -331,14 +349,15 @@ struct ContentView: View {
     private func runLaunchStory() {
         guard showIntro else { return }
 
-        let introImpact = UIImpactFeedbackGenerator(style: .soft)
+        let style = introStyle
+        let introImpact = UIImpactFeedbackGenerator(style: style.impactStyle)
         introImpact.prepare()
 
         withAnimation(.easeOut(duration: 0.34)) {
             introGlow = true
             introTitleVisible = true
         }
-        introImpact.impactOccurred(intensity: 0.72)
+        introImpact.impactOccurred(intensity: style.impactIntensity)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             withAnimation(.easeOut(duration: 0.26)) {
@@ -350,6 +369,59 @@ struct ContentView: View {
             withAnimation(.easeInOut(duration: 0.35)) {
                 showIntro = false
             }
+        }
+    }
+
+    private var introStyle: IntroStyle {
+        switch introTone {
+        case .seriousClassical:
+            return IntroStyle(
+                title: "Panini Sutra Engine",
+                subtitle: "Ancient linguistic precision, rendered in Swift.",
+                colors: [
+                    Color(uiColor: .systemBackground).opacity(0.97),
+                    Color.brown.opacity(0.16),
+                    Color.orange.opacity(0.12)
+                ],
+                glowColor: .orange,
+                titleGradient: [.brown, .orange],
+                titleSize: 34,
+                subtitleColor: .secondary,
+                impactStyle: .soft,
+                impactIntensity: 0.68
+            )
+        case .modernApple:
+            return IntroStyle(
+                title: "Panini Engine",
+                subtitle: "Where 2500-year-old rules become living motion.",
+                colors: [
+                    Color(uiColor: .systemBackground).opacity(0.95),
+                    Color.blue.opacity(0.16),
+                    Color.teal.opacity(0.14)
+                ],
+                glowColor: .blue,
+                titleGradient: [.blue, .teal],
+                titleSize: 36,
+                subtitleColor: .secondary,
+                impactStyle: .soft,
+                impactIntensity: 0.72
+            )
+        case .dramaticStage:
+            return IntroStyle(
+                title: "SANDHI: LIVE",
+                subtitle: "Watch sound laws collide, transform, and resolve.",
+                colors: [
+                    Color.black.opacity(0.96),
+                    Color.red.opacity(0.28),
+                    Color.orange.opacity(0.18)
+                ],
+                glowColor: .red,
+                titleGradient: [.red, .orange],
+                titleSize: 38,
+                subtitleColor: .white.opacity(0.82),
+                impactStyle: .rigid,
+                impactIntensity: 0.84
+            )
         }
     }
 }
