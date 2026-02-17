@@ -37,6 +37,23 @@ struct SandhiResult: Sendable {
     let input: String
     let output: String
     let steps: [SandhiStep]
+    let trace: [SandhiRuleTrace]
+}
+
+enum SandhiRuleTraceOutcome: String, Sendable {
+    case failed
+    case matched
+    case skipped
+}
+
+struct SandhiRuleTrace: Identifiable, Hashable, Sendable {
+    let id = UUID()
+    let phase: SandhiPhase
+    let sutra: SandhiSutra
+    let outcome: SandhiRuleTraceOutcome
+    let reasoning: String
+    let before: String
+    let after: String
 }
 
 enum SutraImplementationStatus: String, CaseIterable {
@@ -168,10 +185,24 @@ enum SandhiEngine {
             noMatchExplanation: "No Chapter 6.1 project rule matched this boundary."
         )
         steps.append(chapter6Result.step)
+        var trace = chapter6Result.trace
 
         let activeStep: SandhiStep
         if chapter6Result.matched != nil {
             activeStep = chapter6Result.step
+            let skippedVisarga = visargaProjectRules
+                .sorted { $0.priority < $1.priority }
+                .map { rule in
+                    SandhiRuleTrace(
+                        phase: .chapter8_3,
+                        sutra: rule.sutra,
+                        outcome: .skipped,
+                        reasoning: "Skipped because a Chapter 6.1 rule already matched.",
+                        before: context.joined,
+                        after: chapter6Result.step.after
+                    )
+                }
+            trace.append(contentsOf: skippedVisarga)
         } else {
             let visargaResult = applyRules(
                 context,
@@ -180,6 +211,7 @@ enum SandhiEngine {
                 noMatchExplanation: "No Visarga module rule matched this boundary."
             )
             steps.append(visargaResult.step)
+            trace.append(contentsOf: visargaResult.trace)
             activeStep = visargaResult.step
         }
 
@@ -196,7 +228,8 @@ enum SandhiEngine {
         return SandhiResult(
             input: input,
             output: activeStep.after,
-            steps: steps
+            steps: steps,
+            trace: trace
         )
     }
 
@@ -240,7 +273,8 @@ enum SandhiEngine {
         return SandhiResult(
             input: input,
             output: chapterResult.step.after,
-            steps: steps
+            steps: steps,
+            trace: chapterResult.trace
         )
     }
 
@@ -510,22 +544,66 @@ enum SandhiEngine {
         in rules: [ChapterRule],
         phase: SandhiPhase,
         noMatchExplanation: String
-    ) -> (step: SandhiStep, matched: ChapterRule?) {
+    ) -> (step: SandhiStep, matched: ChapterRule?, trace: [SandhiRuleTrace]) {
         let ordered = rules.sorted { $0.priority < $1.priority }
+        var trace: [SandhiRuleTrace] = []
+        var matchedRule: ChapterRule?
+        var matchedOutput: String?
 
         for rule in ordered {
-            if let output = rule.apply(context) {
-                return (
-                    SandhiStep(
+            if matchedRule != nil {
+                trace.append(
+                    SandhiRuleTrace(
                         phase: phase,
                         sutra: rule.sutra,
-                        explanation: rule.explanation,
+                        outcome: .skipped,
+                        reasoning: "Not evaluated because a higher-priority rule already matched.",
+                        before: context.joined,
+                        after: matchedOutput ?? (context.leftWord + context.rightWord)
+                    )
+                )
+                continue
+            }
+
+            if let output = rule.apply(context) {
+                matchedRule = rule
+                matchedOutput = output
+                trace.append(
+                    SandhiRuleTrace(
+                        phase: phase,
+                        sutra: rule.sutra,
+                        outcome: .matched,
+                        reasoning: rule.explanation,
                         before: context.joined,
                         after: output
-                    ),
-                    rule
+                    )
+                )
+            } else {
+                trace.append(
+                    SandhiRuleTrace(
+                        phase: phase,
+                        sutra: rule.sutra,
+                        outcome: .failed,
+                        reasoning: "Condition not met at this boundary.",
+                        before: context.joined,
+                        after: context.leftWord + context.rightWord
+                    )
                 )
             }
+        }
+
+        if let matchedRule, let matchedOutput {
+            return (
+                SandhiStep(
+                    phase: phase,
+                    sutra: matchedRule.sutra,
+                    explanation: matchedRule.explanation,
+                    before: context.joined,
+                    after: matchedOutput
+                ),
+                matchedRule,
+                trace
+            )
         }
 
         return (
@@ -536,7 +614,8 @@ enum SandhiEngine {
                 before: context.joined,
                 after: context.leftWord + context.rightWord
             ),
-            nil
+            nil,
+            trace
         )
     }
 

@@ -37,6 +37,15 @@ struct ContentView: View {
         let explanation: String
     }
 
+    private struct TraceDisplayRow: Identifiable {
+        let id: String
+        let symbol: String
+        let tint: Color
+        let title: String
+        let detail: String
+        let transform: String
+    }
+
     private enum InputField {
         case left
         case right
@@ -56,6 +65,9 @@ struct ContentView: View {
     @State private var isMerged = false
     @State private var isPreparingMerge = false
     @State private var showRuleBadge = false
+    @State private var showTraceCard = false
+    @State private var isChantEnabled = true
+    @State private var traceRows: [TraceDisplayRow] = []
     @State private var showIntro = true
     @State private var introTitleVisible = false
     @State private var introSubtitleVisible = false
@@ -112,17 +124,54 @@ struct ContentView: View {
 
                     ZStack {
                         if isMerged, let resultWord {
-                            VStack(spacing: 16) {
+                            VStack(spacing: 14) {
                                 ZStack {
-                                    WordBubble(text: resultWord, isResult: true)
-                                        .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
+                                    mergedFrontCard(resultWord: resultWord)
+                                        .opacity(showTraceCard ? 0 : 1)
+                                        .rotation3DEffect(
+                                            .degrees(showTraceCard ? 180 : 0),
+                                            axis: (x: 0, y: 1, z: 0)
+                                        )
 
-                                    Color.clear
-                                        .frame(width: 1, height: 1)
-                                        .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
+                                    mergedTraceCard
+                                        .opacity(showTraceCard ? 1 : 0)
+                                        .rotation3DEffect(
+                                            .degrees(showTraceCard ? 0 : -180),
+                                            axis: (x: 0, y: 1, z: 0)
+                                        )
                                 }
-                                .contentShape(Rectangle())
-                                .onTapGesture { reset() }
+                                .animation(.easeInOut(duration: 0.34), value: showTraceCard)
+                                .frame(maxWidth: .infinity)
+
+                                HStack(spacing: 10) {
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 0.28)) {
+                                            showTraceCard.toggle()
+                                        }
+                                        playXRayToggleCue()
+                                    }) {
+                                        Label(
+                                            showTraceCard ? "Show Result" : "Algorithm X-Ray",
+                                            systemImage: showTraceCard ? "sparkles.rectangle.stack" : "waveform.path.ecg"
+                                        )
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.blue)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color.blue.opacity(0.12), in: Capsule())
+                                    }
+
+                                    if isChantEnabled {
+                                        Button(action: chantVisibleResult) {
+                                            Label("Chant", systemImage: "speaker.wave.2.fill")
+                                                .font(.footnote.weight(.semibold))
+                                                .foregroundStyle(.teal)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(Color.teal.opacity(0.12), in: Capsule())
+                                        }
+                                    }
+                                }
 
                                 if showRuleBadge {
                                     Text(ruleLabel)
@@ -158,7 +207,7 @@ struct ContentView: View {
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                         }
                     }
-                    .frame(height: 210)
+                    .frame(height: 260)
 
                     Spacer(minLength: 0)
 
@@ -187,6 +236,50 @@ struct ContentView: View {
                                 }
                         }
                         .disabled(isPreparingMerge)
+                        .padding(.horizontal, 24)
+
+                        if UIDevice.current.userInterfaceIdiom == .pad {
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    focusedField = .left
+                                    playPencilCue()
+                                }) {
+                                    Label("Focus Word 1", systemImage: "pencil.tip.crop.circle")
+                                        .font(.footnote.weight(.semibold))
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+
+                                Button(action: {
+                                    focusedField = .right
+                                    playPencilCue()
+                                }) {
+                                    Label("Focus Word 2", systemImage: "pencil.tip.crop.circle")
+                                        .font(.footnote.weight(.semibold))
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            .padding(.horizontal, 24)
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "pencil.and.scribble")
+                                Text("Use Apple Pencil directly on focused text field (native Scribble, offline).")
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 24)
+                        }
+
+                        Toggle(isOn: $isChantEnabled) {
+                            Label(
+                                isChantEnabled ? "Voice of Panini: On" : "Voice of Panini: Off",
+                                systemImage: isChantEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"
+                            )
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        }
+                        .toggleStyle(.switch)
                         .padding(.horizontal, 24)
 
                         Button(action: {
@@ -311,6 +404,71 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func mergedFrontCard(resultWord: String) -> some View {
+        VStack(spacing: 16) {
+            ZStack {
+                WordBubble(text: resultWord, isResult: true)
+                    .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
+
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { reset() }
+        }
+    }
+
+    private var mergedTraceCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.path.ecg.rectangle")
+                    .foregroundStyle(.blue)
+                Text("TRACE LOG")
+                    .font(.caption.weight(.black))
+                    .tracking(0.5)
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(traceRows) { row in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: row.symbol)
+                                    .foregroundStyle(row.tint)
+
+                                Text(row.title)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
+
+                            Text(row.detail)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
+                            Text(row.transform)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+            .frame(height: 150)
+        }
+        .padding(14)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.blue.opacity(0.15), lineWidth: 1)
+        )
+        .padding(.horizontal, 8)
+    }
+
     private func combine() {
         guard !isPreparingMerge else { return }
         focusedField = nil
@@ -324,6 +482,13 @@ struct ContentView: View {
         let matchedText = matchedSutra.map { "Rule Applied: \($0.code) • \($0.title)" } ??
             "Rule Applied: none"
         let output = ScriptAdapter.present(sandhiResult.output, as: prepared.outputScript)
+
+        traceRows = buildTraceRows(from: sandhiResult.trace)
+        showTraceCard = false
+
+        let speakLeft = ScriptAdapter.present(prepared.left, as: .devanagari)
+        let speakRight = ScriptAdapter.present(prepared.right, as: .devanagari)
+        let speakResult = ScriptAdapter.present(sandhiResult.output, as: .devanagari)
 
         playMergeCueStart()
 
@@ -344,6 +509,12 @@ struct ContentView: View {
 
             playMergeCueSuccess()
 
+            if isChantEnabled {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                    AudioEngine.shared.chant(word1: speakLeft, word2: speakRight, result: speakResult)
+                }
+            }
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 withAnimation(.easeOut(duration: 0.24)) {
                     showRuleBadge = true
@@ -353,14 +524,27 @@ struct ContentView: View {
     }
 
     private func reset() {
+        AudioEngine.shared.stop()
         playResetCue()
         withAnimation(.spring(response: 0.5, dampingFraction: 0.78)) {
             isMerged = false
             isPreparingMerge = false
             resultWord = nil
             showRuleBadge = false
+            showTraceCard = false
+            traceRows = []
             ruleLabel = "Panini Engine Ready"
         }
+    }
+
+    private func chantVisibleResult() {
+        guard let resultWord, !resultWord.isEmpty else { return }
+        let prepared = ScriptAdapter.prepare(left: leftWord, right: rightWord)
+        let spokenLeft = ScriptAdapter.present(prepared.left, as: .devanagari)
+        let spokenRight = ScriptAdapter.present(prepared.right, as: .devanagari)
+        let spokenResult = ScriptAdapter.prepareMerged(word: resultWord).word
+        let renderedResult = ScriptAdapter.present(spokenResult, as: .devanagari)
+        AudioEngine.shared.chant(word1: spokenLeft, word2: spokenRight, result: renderedResult)
     }
 
     private func beginEditing(_ field: InputField) {
@@ -411,6 +595,8 @@ struct ContentView: View {
             isMerged = false
             resultWord = nil
             showRuleBadge = false
+            showTraceCard = false
+            traceRows = []
             ruleLabel = "Panini Engine Ready"
         }
 
@@ -458,6 +644,31 @@ struct ContentView: View {
         return .blue
     }
 
+    private func buildTraceRows(from trace: [SandhiRuleTrace]) -> [TraceDisplayRow] {
+        trace.enumerated().map { index, entry in
+            let style = traceStyle(for: entry.outcome)
+            return TraceDisplayRow(
+                id: "\(index)-\(entry.sutra.code)-\(entry.outcome.rawValue)",
+                symbol: style.symbol,
+                tint: style.tint,
+                title: "\(style.label) \(entry.sutra.code) • \(entry.sutra.title)",
+                detail: entry.reasoning,
+                transform: "\(entry.before) -> \(entry.after)"
+            )
+        }
+    }
+
+    private func traceStyle(for outcome: SandhiRuleTraceOutcome) -> (label: String, symbol: String, tint: Color) {
+        switch outcome {
+        case .matched:
+            return ("MATCH", "checkmark.seal.fill", .green)
+        case .failed:
+            return ("FAIL", "xmark.circle.fill", .red)
+        case .skipped:
+            return ("SKIP", "arrowshape.turn.up.right.circle.fill", .gray)
+        }
+    }
+
     private func playMergeCueStart() {
         let impact = UIImpactFeedbackGenerator(style: .soft)
         impact.prepare()
@@ -484,6 +695,19 @@ struct ContentView: View {
         notifier.prepare()
         notifier.notificationOccurred(foundCandidates ? .success : .warning)
         AudioServicesPlaySystemSound(foundCandidates ? 1113 : 1102)
+    }
+
+    private func playXRayToggleCue() {
+        let impact = UIImpactFeedbackGenerator(style: .rigid)
+        impact.prepare()
+        impact.impactOccurred(intensity: 0.65)
+        AudioServicesPlaySystemSound(1157)
+    }
+
+    private func playPencilCue() {
+        let impact = UIImpactFeedbackGenerator(style: .soft)
+        impact.prepare()
+        impact.impactOccurred(intensity: 0.65)
     }
 
     private var introOverlay: some View {
