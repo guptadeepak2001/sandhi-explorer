@@ -21,17 +21,38 @@ struct ContentView: View {
         let impactIntensity: CGFloat
     }
 
+    private enum ExplorerMode: String, CaseIterable, Identifiable {
+        case combine = "Combine"
+        case analyze = "Analyze"
+
+        var id: String { rawValue }
+    }
+
+    private struct ReverseDisplayCandidate: Identifiable {
+        let id: String
+        let left: String
+        let right: String
+        let sutraLabel: String
+        let confidenceLabel: String
+        let explanation: String
+    }
+
     private enum InputField {
         case left
         case right
+        case merged
     }
 
     // One-line style switch for demo tuning.
     private let introTone: IntroTone = .modernApple
 
+    @State private var mode: ExplorerMode = .combine
     @State private var leftWord = ""
     @State private var rightWord = ""
+    @State private var mergedWord = ""
     @State private var resultWord: String?
+    @State private var reverseCandidates: [ReverseDisplayCandidate] = []
+    @State private var reverseStatusMessage = "Enter a merged word and tap Analyze."
     @State private var isMerged = false
     @State private var isPreparingMerge = false
     @State private var showRuleBadge = false
@@ -78,106 +99,192 @@ struct ContentView: View {
                 }
                 .padding(.top, 30)
 
-                Spacer(minLength: 0)
-
-                ZStack {
-                    if isMerged, let resultWord {
-                        VStack(spacing: 16) {
-                            ZStack {
-                                WordBubble(text: resultWord, isResult: true)
-                                    .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
-
-                                Color.clear
-                                    .frame(width: 1, height: 1)
-                                    .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { reset() }
-
-                            if showRuleBadge {
-                                Text(ruleLabel)
-                                    .font(.callout.weight(.semibold))
-                                    .foregroundStyle(.blue)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 10)
-                                    .background(Color.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
-                                    .multilineTextAlignment(.center)
-                                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                            }
-                        }
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    } else {
-                        HStack(spacing: 14) {
-                            WordBubble(text: displayWord(leftWord))
-                                .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
-                                .offset(x: isPreparingMerge ? 20 : 0)
-                                .scaleEffect(isPreparingMerge ? 0.96 : 1.0)
-
-                            Image(systemName: "plus")
-                                .font(.title2.weight(.bold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(isPreparingMerge ? 90 : 0))
-                                .scaleEffect(isPreparingMerge ? 0.35 : 1.0)
-                                .opacity(isPreparingMerge ? 0.0 : 0.6)
-
-                            WordBubble(text: displayWord(rightWord))
-                                .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
-                                .offset(x: isPreparingMerge ? -20 : 0)
-                                .scaleEffect(isPreparingMerge ? 0.96 : 1.0)
-                        }
-                        .transition(.scale(scale: 0.95).combined(with: .opacity))
+                Picker("Mode", selection: $mode) {
+                    ForEach(ExplorerMode.allCases) { item in
+                        Text(item.rawValue).tag(item)
                     }
                 }
-                .frame(height: 210)
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 24)
 
-                Spacer(minLength: 0)
+                if mode == .combine {
+                    Spacer(minLength: 0)
 
-                VStack(spacing: 18) {
-                    HStack(spacing: 12) {
-                        TextField("Word 1", text: $leftWord)
-                            .textFieldStyle(.roundedBorder)
-                            .multilineTextAlignment(.center)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focusedField, equals: .left)
-                            .submitLabel(.next)
-                            .onSubmit { focusedField = .right }
+                    ZStack {
+                        if isMerged, let resultWord {
+                            VStack(spacing: 16) {
+                                ZStack {
+                                    WordBubble(text: resultWord, isResult: true)
+                                        .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
 
-                        TextField("Word 2", text: $rightWord)
-                            .textFieldStyle(.roundedBorder)
-                            .multilineTextAlignment(.center)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focusedField, equals: .right)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                if !isMerged && !isPreparingMerge {
-                                    combine()
+                                    Color.clear
+                                        .frame(width: 1, height: 1)
+                                        .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
+                                }
+                                .contentShape(Rectangle())
+                                .onTapGesture { reset() }
+
+                                if showRuleBadge {
+                                    Text(ruleLabel)
+                                        .font(.callout.weight(.semibold))
+                                        .foregroundStyle(.blue)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .background(Color.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                                        .multilineTextAlignment(.center)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
                                 }
                             }
-                    }
-                    .disabled(isPreparingMerge)
-                    .padding(.horizontal, 24)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        } else {
+                            HStack(spacing: 14) {
+                                WordBubble(text: displayWord(leftWord))
+                                    .matchedGeometryEffect(id: "leftBubble", in: animationSpace)
+                                    .offset(x: isPreparingMerge ? 20 : 0)
+                                    .scaleEffect(isPreparingMerge ? 0.96 : 1.0)
 
-                    Button(action: {
-                        guard !isPreparingMerge else { return }
-                        isMerged ? reset() : combine()
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: buttonSymbol)
-                            Text(buttonTitle)
+                                Image(systemName: "plus")
+                                    .font(.title2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                    .rotationEffect(.degrees(isPreparingMerge ? 90 : 0))
+                                    .scaleEffect(isPreparingMerge ? 0.35 : 1.0)
+                                    .opacity(isPreparingMerge ? 0.0 : 0.6)
+
+                                WordBubble(text: displayWord(rightWord))
+                                    .matchedGeometryEffect(id: "rightBubble", in: animationSpace)
+                                    .offset(x: isPreparingMerge ? -20 : 0)
+                                    .scaleEffect(isPreparingMerge ? 0.96 : 1.0)
+                            }
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
                         }
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(buttonColor, in: RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: isMerged ? .clear : Color.blue.opacity(0.25), radius: 10, x: 0, y: 5)
                     }
-                    .disabled(isPreparingMerge)
+                    .frame(height: 210)
+
+                    Spacer(minLength: 0)
+
+                    VStack(spacing: 18) {
+                        HStack(spacing: 12) {
+                            TextField("Word 1", text: $leftWord)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.center)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .focused($focusedField, equals: .left)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .right }
+
+                            TextField("Word 2", text: $rightWord)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.center)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .focused($focusedField, equals: .right)
+                                .submitLabel(.done)
+                                .onSubmit {
+                                    if !isMerged && !isPreparingMerge {
+                                        combine()
+                                    }
+                                }
+                        }
+                        .disabled(isPreparingMerge)
+                        .padding(.horizontal, 24)
+
+                        Button(action: {
+                            guard !isPreparingMerge else { return }
+                            isMerged ? reset() : combine()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: buttonSymbol)
+                                Text(buttonTitle)
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(buttonColor, in: RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: isMerged ? .clear : Color.blue.opacity(0.25), radius: 10, x: 0, y: 5)
+                        }
+                        .disabled(isPreparingMerge)
+                        .padding(.horizontal, 24)
+                    }
+                    .padding(.bottom, 36)
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Reverse Sandhi Analyzer")
+                            .font(.headline)
+
+                        Text("Input merged word and get top split candidates with sutra confidence.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        TextField("Merged word (e.g. devAlaya or देवालय)", text: $mergedWord)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .merged)
+                            .submitLabel(.search)
+                            .onSubmit { analyzeMergedWord() }
+
+                        Button(action: analyzeMergedWord) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                Text("Analyze Split")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.teal, in: RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: Color.teal.opacity(0.25), radius: 10, x: 0, y: 5)
+                        }
+
+                        Text(reverseStatusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        if reverseCandidates.isEmpty {
+                            Text("No candidates yet.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 10) {
+                                    ForEach(reverseCandidates) { candidate in
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            HStack {
+                                                Text("\(candidate.left) + \(candidate.right)")
+                                                    .font(.subheadline.monospaced())
+                                                    .fontWeight(.semibold)
+
+                                                Spacer(minLength: 0)
+
+                                                Text(candidate.confidenceLabel)
+                                                    .font(.caption.weight(.bold))
+                                                    .foregroundStyle(.teal)
+                                            }
+
+                                            Text(candidate.sutraLabel)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(.secondary)
+
+                                            Text(candidate.explanation)
+                                                .font(.footnote)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding()
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 260)
+                        }
+                    }
                     .padding(.horizontal, 24)
+                    .padding(.top, 8)
+
+                    Spacer(minLength: 0)
                 }
-                .padding(.bottom, 36)
 
                 Text("Scope lock: 6.1.77-6.1.109 + 8.3.34, 8.3.36, 6.1.114")
                     .font(.footnote)
@@ -195,7 +302,9 @@ struct ContentView: View {
         .animation(.spring(response: 0.58, dampingFraction: 0.74), value: isMerged)
         .onChange(of: focusedField) { newValue in
             guard let field = newValue else { return }
-            beginEditing(field)
+            if field == .left || field == .right {
+                beginEditing(field)
+            }
         }
         .task {
             runLaunchStory()
@@ -259,6 +368,42 @@ struct ContentView: View {
             clearMergedState(animated: true)
         }
         focusedField = field
+    }
+
+    private func analyzeMergedWord() {
+        focusedField = nil
+        let normalizedMerged = mergedWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedMerged.isEmpty else {
+            reverseCandidates = []
+            reverseStatusMessage = "Enter a merged word to analyze."
+            return
+        }
+
+        let prepared = ScriptAdapter.prepareMerged(word: normalizedMerged)
+        let reverseResult = ReverseSandhiAnalyzer.analyze(merged: prepared.word, maxCandidates: 5)
+
+        reverseCandidates = reverseResult.candidates.map { candidate in
+            let leftDisplay = ScriptAdapter.present(candidate.left, as: prepared.outputScript)
+            let rightDisplay = ScriptAdapter.present(candidate.right, as: prepared.outputScript)
+            let percent = Int((candidate.confidence * 100).rounded())
+
+            return ReverseDisplayCandidate(
+                id: candidate.id,
+                left: leftDisplay,
+                right: rightDisplay,
+                sutraLabel: "\(candidate.sutra.code) • \(candidate.sutra.title)",
+                confidenceLabel: "\(percent)%",
+                explanation: candidate.explanation
+            )
+        }
+
+        if reverseCandidates.isEmpty {
+            reverseStatusMessage = "No confident split found in current active rule scope."
+            playAnalyzeCue(foundCandidates: false)
+        } else {
+            reverseStatusMessage = "Top \(reverseCandidates.count) candidate(s) ranked by confidence."
+            playAnalyzeCue(foundCandidates: true)
+        }
     }
 
     private func clearMergedState(animated: Bool) {
@@ -332,6 +477,13 @@ struct ContentView: View {
         impact.prepare()
         impact.impactOccurred(intensity: 0.7)
         AudioServicesPlaySystemSound(1105)
+    }
+
+    private func playAnalyzeCue(foundCandidates: Bool) {
+        let notifier = UINotificationFeedbackGenerator()
+        notifier.prepare()
+        notifier.notificationOccurred(foundCandidates ? .success : .warning)
+        AudioServicesPlaySystemSound(foundCandidates ? 1113 : 1102)
     }
 
     private var introOverlay: some View {

@@ -12,6 +12,11 @@ enum ScriptAdapter {
         let outputScript: OutputScript
     }
 
+    struct PreparedMergedInput {
+        let word: String
+        let outputScript: OutputScript
+    }
+
     static func prepare(left: String, right: String) -> PreparedInput {
         let trimmedLeft = left.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRight = right.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -31,6 +36,16 @@ enum ScriptAdapter {
         case .devanagari:
             return internalToDevanagari(value)
         }
+    }
+
+    static func prepareMerged(word: String) -> PreparedMergedInput {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldRenderDevanagari = containsDevanagari(trimmed)
+
+        return PreparedMergedInput(
+            word: normalizeToInternal(trimmed),
+            outputScript: shouldRenderDevanagari ? .devanagari : .romanized
+        )
     }
 
     private static let devaRange = 0x0900...0x097F
