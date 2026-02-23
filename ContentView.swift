@@ -32,6 +32,7 @@ struct ContentView: View {
         let id: String
         let left: String
         let right: String
+        let confidence: Double
         let sutraLabel: String
         let confidenceLabel: String
         let explanation: String
@@ -168,6 +169,7 @@ struct ContentView: View {
                 if mode == .combine {
                     GeometryReader { geometry in
                         let previewHeight = combinePreviewHeight(for: geometry.size.height, isMerged: isMerged)
+                        let cardHeight = predictionCardHeight(for: geometry.size.height)
 
                         VStack(spacing: 14) {
                         ZStack {
@@ -304,9 +306,10 @@ struct ContentView: View {
 
                                     if let oraclePrediction {
                                         oraclePredictionCard(
-                                            prediction: oraclePrediction
+                                            prediction: oraclePrediction,
+                                            cardHeight: cardHeight
                                         )
-                                        .frame(maxHeight: .infinity, alignment: .top)
+                                        .frame(height: cardHeight, alignment: .top)
                                         .padding(.top, predictionCardTopGap)
                                         .padding(.horizontal, 24)
                                         .transition(.opacity)
@@ -771,6 +774,7 @@ struct ContentView: View {
                 id: candidate.id,
                 left: leftDisplay,
                 right: rightDisplay,
+                confidence: candidate.confidence,
                 sutraLabel: "\(candidate.sutra.code) • \(candidate.sutra.title)",
                 confidenceLabel: "\(percent)%",
                 explanation: candidate.explanation
@@ -779,54 +783,104 @@ struct ContentView: View {
     }
 
     private var analyzePreviewCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let primary = analyzePreviewCandidates.first
+        let alternatives = Array(analyzePreviewCandidates.dropFirst())
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.teal)
                 Text("Split Prediction")
                     .font(.headline)
                 Spacer(minLength: 0)
+                if let primary {
+                    Text(primary.confidenceLabel)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.teal)
+                }
             }
 
-            Text(analyzePreviewMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Divider()
 
-            if analyzePreviewCandidates.isEmpty {
+            if let primary {
+                Text("\(primary.left) + \(primary.right)")
+                    .font(.subheadline.monospaced())
+                    .fontWeight(.semibold)
+
+                Text(primary.sutraLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                ProgressView(value: primary.confidence)
+                    .tint(.teal)
+
+                ScrollView(showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(analyzePreviewMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(primary.explanation)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        Text("Expected split: \(primary.left) + \(primary.right)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        if !alternatives.isEmpty {
+                            Divider()
+                            Text("Alternative possibilities")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(alternatives) { candidate in
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(candidate.left) + \(candidate.right)")
+                                            .font(.caption.weight(.semibold))
+                                        Text(candidate.sutraLabel)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text(candidate.explanation)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+
+                                    Spacer(minLength: 0)
+
+                                    Text(candidate.confidenceLabel)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.teal)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.trailing, 4)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                Text(analyzePreviewMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Text("No preview candidates yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(analyzePreviewCandidates) { candidate in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("\(candidate.left) + \(candidate.right)")
-                                .font(.subheadline.monospaced())
-                                .fontWeight(.semibold)
 
-                            Spacer(minLength: 0)
-
-                            Text(candidate.confidenceLabel)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.teal)
-                        }
-
-                        Text(candidate.sutraLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-                }
+                Spacer(minLength: 0)
             }
         }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: analyzePreviewCardHeight, alignment: .top)
+        .padding(14)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.teal.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.teal.opacity(0.30), lineWidth: 1.5)
         )
+        .clipped()
     }
 
     private func clearMergedState(animated: Bool) {
@@ -942,8 +996,14 @@ struct ContentView: View {
 
     @ViewBuilder
     private func oraclePredictionCard(
-        prediction: RuleOracle.Prediction
+        prediction: RuleOracle.Prediction,
+        cardHeight: CGFloat
     ) -> some View {
+        let detailsHeight = predictionDetailsHeight(
+            for: cardHeight,
+            hasScoreRow: predictionTestsTotal > 0
+        )
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
@@ -960,6 +1020,7 @@ struct ContentView: View {
 
             Text(oracleRuleLabel(for: prediction.primary))
                 .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
 
             ProgressView(value: prediction.primary.confidence)
                 .tint(.orange)
@@ -971,6 +1032,8 @@ struct ContentView: View {
                     Text("Session score: \(predictionTestsCorrect)/\(predictionTestsTotal) correct (\(predictionAccuracyPercent)%)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Spacer(minLength: 0)
 
@@ -988,19 +1051,23 @@ struct ContentView: View {
                     Text(prediction.primary.reasoning)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(prediction.boundarySummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(paribhashaExplanation(for: prediction))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     let expectedDisplay = ScriptAdapter.present(prediction.expectedOutput, as: oracleOutputScript)
                     Text("Expected output: \(expectedDisplay)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if !prediction.alternatives.isEmpty {
                         Divider()
@@ -1013,10 +1080,13 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(oracleRuleLabel(for: candidate))
                                         .font(.caption.weight(.semibold))
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text(candidate.reasoning)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 Spacer(minLength: 0)
                                 Text(confidenceLabel(candidate.confidence))
                                     .font(.caption.weight(.semibold))
@@ -1027,9 +1097,9 @@ struct ContentView: View {
                 }
                 .padding(.trailing, 4)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(height: detailsHeight, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(14)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
@@ -1059,6 +1129,13 @@ struct ContentView: View {
 
     private var predictionCardTopGap: CGFloat {
         isPad ? 16 : 14
+    }
+
+    private var analyzePreviewCardHeight: CGFloat {
+        if analyzePreviewCandidates.isEmpty {
+            return isPad ? 150 : 130
+        }
+        return isPad ? 300 : 245
     }
 
     private func resetPredictionScore() {
@@ -1097,6 +1174,18 @@ struct ContentView: View {
             return min(250, max(170, availableHeight * 0.34))
         }
         return min(195, max(128, availableHeight * 0.27))
+    }
+
+    private func predictionCardHeight(for availableHeight: CGFloat) -> CGFloat {
+        if isPad {
+            return min(430, max(280, availableHeight * 0.44))
+        }
+        return min(340, max(250, availableHeight * 0.42))
+    }
+
+    private func predictionDetailsHeight(for cardHeight: CGFloat, hasScoreRow: Bool) -> CGFloat {
+        let fixedSectionHeight: CGFloat = hasScoreRow ? 182 : 154
+        return max(120, cardHeight - fixedSectionHeight)
     }
 
     private func displayWord(_ value: String) -> String {
