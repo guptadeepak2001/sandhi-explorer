@@ -229,7 +229,8 @@ struct ContentView: View {
                                             .autocorrectionDisabled()
                                             .focused($focusedField, equals: .left)
                                             .submitLabel(.next)
-                                            .onSubmit { focusedField = .right }
+                                            .onSubmit { requestKeyboard(for: .right) }
+                                            .onTapGesture { requestKeyboard(for: .left) }
 
                                         TextField("Word 2", text: $rightWord)
                                             .textFieldStyle(.roundedBorder)
@@ -238,6 +239,7 @@ struct ContentView: View {
                                             .autocorrectionDisabled()
                                             .focused($focusedField, equals: .right)
                                             .submitLabel(.done)
+                                            .onTapGesture { requestKeyboard(for: .right) }
                                             .onSubmit {
                                                 if !isMerged && !isPreparingMerge {
                                                     combine()
@@ -270,33 +272,9 @@ struct ContentView: View {
                                         .padding(.horizontal, 24)
                                         .padding(.top, 12)
 
-                                        HStack(spacing: 12) {
-                                            Button(action: {
-                                                focusedField = .left
-                                                playPencilCue()
-                                            }) {
-                                                Label("Focus Word 1", systemImage: "pencil.tip.crop.circle")
-                                                    .font(.footnote.weight(.semibold))
-                                                    .frame(maxWidth: .infinity)
-                                            }
-                                            .buttonStyle(.bordered)
-
-                                            Button(action: {
-                                                focusedField = .right
-                                                playPencilCue()
-                                            }) {
-                                                Label("Focus Word 2", systemImage: "pencil.tip.crop.circle")
-                                                    .font(.footnote.weight(.semibold))
-                                                    .frame(maxWidth: .infinity)
-                                            }
-                                            .buttonStyle(.bordered)
-                                        }
-                                        .padding(.horizontal, 24)
-                                        .padding(.top, 10)
-
                                         HStack(spacing: 6) {
                                             Image(systemName: "pencil.and.scribble")
-                                            Text("Use Pencil sheet for OCR or write directly into focused fields via native Scribble.")
+                                            Text("Use Pencil sheet for OCR or type directly in Word 1 / Word 2.")
                                         }
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -501,12 +479,6 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .onChange(of: focusedField) { newValue in
-            guard let field = newValue else { return }
-            if field == .left || field == .right {
-                beginEditing(field)
-            }
-        }
         .onChange(of: leftWord) { _ in
             refreshOraclePrediction()
         }
@@ -704,11 +676,15 @@ struct ContentView: View {
         AudioEngine.shared.chant(word1: spokenLeft, word2: spokenRight, result: renderedResult)
     }
 
-    private func beginEditing(_ field: InputField) {
-        if isMerged {
+    private func requestKeyboard(for field: InputField) {
+        if field == .left || field == .right, isMerged {
             clearMergedState(animated: true)
         }
-        focusedField = field
+        // Force first-responder handoff so tap reliably requests the software keyboard.
+        focusedField = nil
+        DispatchQueue.main.async {
+            focusedField = field
+        }
     }
 
     private func analyzeMergedWord() {
