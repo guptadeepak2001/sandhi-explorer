@@ -51,6 +51,7 @@ struct ContentView: View {
         let left: String
         let right: String
         let hint: String
+        let tint: Color
 
         var id: String { "\(left)+\(right)" }
         var title: String { "\(left) + \(right)" }
@@ -69,21 +70,31 @@ struct ContentView: View {
                 VStack(spacing: 2) {
                     Text(suggestion.title)
                         .font(compact ? .caption.weight(.semibold) : .footnote.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Color.primary)
                         .lineLimit(1)
 
                     Text(suggestion.hint)
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(suggestion.tint)
                 }
                 .padding(.horizontal, compact ? 10 : 12)
                 .padding(.vertical, compact ? 7 : 8)
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(
+                    LinearGradient(
+                        colors: [
+                            suggestion.tint.opacity(0.18),
+                            suggestion.tint.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: Capsule()
+                )
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.6), lineWidth: 0.8)
+                        .stroke(suggestion.tint.opacity(0.45), lineWidth: 0.9)
                 )
-                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                .shadow(color: suggestion.tint.opacity(0.24), radius: 10, x: 0, y: 5)
             }
             .buttonStyle(.plain)
             .offset(y: floating ? -4 : 4)
@@ -141,12 +152,12 @@ struct ContentView: View {
     // One-line style switch for demo tuning.
     private let introTone: IntroTone = .modernApple
     private let combineSuggestions: [CombineSuggestion] = [
-        CombineSuggestion(left: "namah", right: "te", hint: "8.3.34"),
-        CombineSuggestion(left: "ramah", right: "cha", hint: "8.3.36"),
-        CombineSuggestion(left: "shivah", right: "vandya", hint: "6.1.114"),
-        CombineSuggestion(left: "deva", right: "alaya", hint: "6.1.101"),
-        CombineSuggestion(left: "maha", right: "indra", hint: "6.1.87"),
-        CombineSuggestion(left: "pra", right: "eka", hint: "6.1.94")
+        CombineSuggestion(left: "namah", right: "te", hint: "8.3.34", tint: .orange),
+        CombineSuggestion(left: "ramah", right: "cha", hint: "8.3.36", tint: .pink),
+        CombineSuggestion(left: "shivah", right: "vandya", hint: "6.1.114", tint: .teal),
+        CombineSuggestion(left: "deva", right: "alaya", hint: "6.1.101", tint: .blue),
+        CombineSuggestion(left: "maha", right: "indra", hint: "6.1.87", tint: .indigo),
+        CombineSuggestion(left: "pra", right: "eka", hint: "6.1.94", tint: .mint)
     ]
 
     @State private var mode: ExplorerMode = .combine
