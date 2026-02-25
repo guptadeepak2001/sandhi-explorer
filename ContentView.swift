@@ -47,6 +47,58 @@ struct ContentView: View {
         let transform: String
     }
 
+    private struct CombineSuggestion: Identifiable {
+        let left: String
+        let right: String
+        let hint: String
+
+        var id: String { "\(left)+\(right)" }
+        var title: String { "\(left) + \(right)" }
+    }
+
+    private struct FloatingSuggestionBubble: View {
+        let suggestion: CombineSuggestion
+        let compact: Bool
+        let phaseDelay: Double
+        let onTap: () -> Void
+
+        @State private var floating = false
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(spacing: 2) {
+                    Text(suggestion.title)
+                        .font(compact ? .caption.weight(.semibold) : .footnote.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(suggestion.hint)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.orange)
+                }
+                .padding(.horizontal, compact ? 10 : 12)
+                .padding(.vertical, compact ? 7 : 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.6), lineWidth: 0.8)
+                )
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+            .offset(y: floating ? -4 : 4)
+            .animation(
+                .easeInOut(duration: 2.2)
+                    .repeatForever(autoreverses: true)
+                    .delay(phaseDelay),
+                value: floating
+            )
+            .onAppear {
+                floating = true
+            }
+        }
+    }
+
     private enum InputField {
         case left
         case right
@@ -88,6 +140,14 @@ struct ContentView: View {
 
     // One-line style switch for demo tuning.
     private let introTone: IntroTone = .modernApple
+    private let combineSuggestions: [CombineSuggestion] = [
+        CombineSuggestion(left: "namah", right: "te", hint: "8.3.34"),
+        CombineSuggestion(left: "ramah", right: "cha", hint: "8.3.36"),
+        CombineSuggestion(left: "shivah", right: "vandya", hint: "6.1.114"),
+        CombineSuggestion(left: "deva", right: "alaya", hint: "6.1.101"),
+        CombineSuggestion(left: "maha", right: "indra", hint: "6.1.87"),
+        CombineSuggestion(left: "pra", right: "eka", hint: "6.1.94")
+    ]
 
     @State private var mode: ExplorerMode = .combine
     @State private var leftWord = ""
@@ -213,6 +273,11 @@ struct ContentView: View {
                                         .scaleEffect(isPreparingMerge ? 0.96 : 1.0)
                                 }
                                 .transition(.scale(scale: 0.95).combined(with: .opacity))
+
+                                if shouldShowCombineSuggestions {
+                                    floatingSuggestionCloud
+                                        .transition(.opacity)
+                                }
                             }
                         }
                         .frame(height: previewHeight)
@@ -685,6 +750,55 @@ struct ContentView: View {
         DispatchQueue.main.async {
             focusedField = field
         }
+    }
+
+    private var shouldShowCombineSuggestions: Bool {
+        guard !isMerged, !isPreparingMerge else { return false }
+        let left = leftWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = rightWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        return left.isEmpty && right.isEmpty
+    }
+
+    private var floatingSuggestionOffsets: [CGSize] {
+        if isPad {
+            return [
+                CGSize(width: -210, height: -64),
+                CGSize(width: 210, height: -58),
+                CGSize(width: -190, height: 68),
+                CGSize(width: 190, height: 72)
+            ]
+        }
+
+        return [
+            CGSize(width: -116, height: -58),
+            CGSize(width: 116, height: -52),
+            CGSize(width: 0, height: 70)
+        ]
+    }
+
+    private var floatingSuggestionCloud: some View {
+        let offsets = floatingSuggestionOffsets
+        let count = min(offsets.count, combineSuggestions.count)
+
+        return ZStack {
+            ForEach(0..<count, id: \.self) { index in
+                FloatingSuggestionBubble(
+                    suggestion: combineSuggestions[index],
+                    compact: !isPad,
+                    phaseDelay: Double(index) * 0.17,
+                    onTap: { applyCombineSuggestion(combineSuggestions[index]) }
+                )
+                .offset(offsets[index])
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func applyCombineSuggestion(_ suggestion: CombineSuggestion) {
+        guard !isPreparingMerge else { return }
+        focusedField = nil
+        leftWord = suggestion.left
+        rightWord = suggestion.right
     }
 
     private func analyzeMergedWord() {
